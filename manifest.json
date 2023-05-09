@@ -1,7 +1,7 @@
 {
     "id": "obsidian-pandoc-advanced",
     "name": "Pandoc Advanced",
-    "version": "0.0.0",
+    "version": "0.0.1",
     "minAppVersion": "0.15.0",
     "description": "precise configuration and templates",
     "author": "Cassandra McCarthy",

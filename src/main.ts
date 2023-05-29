@@ -17,28 +17,34 @@ export default class PandocAdvanced extends Plugin {
     cwd: string;
     settings: Settings;
 
+    prependDataDir(yaml: string): string {
+        return (
+            `data-dir: ${this.cwd}/${this.settings.configurationPath}\n` + yaml
+        );
+    }
+
     async execute(editor: Editor, view: MarkdownView) {
         let tempConfig = "";
 
         const args = [
             `${view.file.path}`,
             "--verbose",
-            "--defaults",
-            `${this.settings.configurationPath}/index.yaml`,
+            `--data-dir=${this.cwd}/${this.settings.configurationPath}`,
+            `--resource-path=${this.cwd}:${this.cwd}/${this.settings.configurationPath}`,
         ];
 
         // if there is a pandoc section in the metadata, write it to a defaults
         // file and include it
         const metadata = this.app.metadataCache.getFileCache(view.file);
         if (metadata?.frontmatter?.pandoc) {
-            tempConfig = `${this.settings.configurationPath}/temp_${view.file.basename}.yaml`;
+            const tempConfigName = `temp_${view.file.basename}.yaml`;
+            tempConfig = `${this.settings.configurationPath}/defaults/${tempConfigName}`;
 
-            args.push("--defaults");
-            args.push(tempConfig);
+            args.push(`--defaults=${tempConfigName}`);
 
             await this.app.vault.adapter.write(
                 tempConfig,
-                stringifyYaml(metadata.frontmatter.pandoc)
+                this.prependDataDir(stringifyYaml(metadata.frontmatter.pandoc))
             );
         }
 
@@ -50,7 +56,10 @@ export default class PandocAdvanced extends Plugin {
             );
 
             new Notice(`Pandoc Advanced:\n${stderr}`);
-            console.log(stdout);
+
+            if (stdout) {
+                console.log(stdout);
+            }
         } catch (error) {
             new Notice(`Pandoc Advanced:\n${error.message}`);
             throw error;
@@ -70,18 +79,6 @@ export default class PandocAdvanced extends Plugin {
         if (file.path != expectedPath) {
             return;
         }
-
-        // always write the index defaults file
-        const index = {
-            "data-dir": this.cwd,
-            "resource-path": [this.settings.configurationPath],
-            defaults: [`${this.settings.configurationPath}/default.yaml`],
-        };
-
-        await this.app.vault.adapter.write(
-            `${this.settings.configurationPath}/index.yaml`,
-            stringifyYaml(index)
-        );
 
         // parse out codeblocks
         const contents = await this.app.vault.read(file);
@@ -106,9 +103,13 @@ export default class PandocAdvanced extends Plugin {
 
             if (saveFilename) {
                 if (line.startsWith("```")) {
+                    await this.app.vault.adapter.mkdir(
+                        `${this.settings.configurationPath}/defaults`
+                    );
+
                     await this.app.vault.adapter.write(
-                        `${this.settings.configurationPath}/${saveFilename}`,
-                        saveFileContents
+                        `${this.settings.configurationPath}/defaults/${saveFilename}`,
+                        this.prependDataDir(saveFileContents)
                     );
 
                     saveFilename = "";
